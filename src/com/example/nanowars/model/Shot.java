@@ -51,6 +51,8 @@ public class Shot {
 
 		moveBy(MOVE_VELOCITY * dt);
 		
+		// TODO: kiedy komórki s¹ zbyt blisko jest klops...
+		
 		if (finished)
 			to.getShotAtBy(this);
 	}

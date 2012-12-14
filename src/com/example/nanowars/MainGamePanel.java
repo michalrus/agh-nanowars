@@ -25,21 +25,21 @@ public class MainGamePanel extends SurfaceView implements
 		SurfaceHolder.Callback {
 
 	private MainThread thread;
-	Vibrator vibrator;
-	Context context;
+	private Vibrator vibrator;
 
 	private ConcurrentLinkedQueue<MotionEvent> motionEvents;
 
 	public Game game;
 
 	private Map<Cell.Type, Bitmap> bitmapCell, bitmapShot;
-	private Bitmap bitmapBackground, bitmapSelected;
-	
+	private Bitmap bitmapBackground;
+
+	private Paint linePaint;
+
 	private static double TEXT_SIZE = 0.04166666666666666666666666666667;
 
 	public MainGamePanel(Context context) {
 		super(context);
-		this.context = context;
 
 		vibrator = (Vibrator) context
 				.getSystemService(Context.VIBRATOR_SERVICE);
@@ -98,9 +98,6 @@ public class MainGamePanel extends SurfaceView implements
 		bitmapBackground = BitmapFactory.decodeResource(getResources(),
 				R.drawable.background);
 
-		bitmapSelected = BitmapFactory.decodeResource(getResources(),
-				R.drawable.human_selected);
-
 		bitmapCell.put(Cell.Type.HUMAN,
 				BitmapFactory.decodeResource(getResources(), R.drawable.human));
 		bitmapCell.put(Cell.Type.ENEMY,
@@ -108,12 +105,15 @@ public class MainGamePanel extends SurfaceView implements
 		bitmapCell.put(Cell.Type.NEUTRAL, BitmapFactory.decodeResource(
 				getResources(), R.drawable.neutral));
 
-		bitmapShot.put(Cell.Type.HUMAN,
-				BitmapFactory.decodeResource(getResources(), R.drawable.human_shot));
-		bitmapShot.put(Cell.Type.ENEMY,
-				BitmapFactory.decodeResource(getResources(), R.drawable.enemy_shot));
+		bitmapShot.put(Cell.Type.HUMAN, BitmapFactory.decodeResource(
+				getResources(), R.drawable.human_shot));
+		bitmapShot.put(Cell.Type.ENEMY, BitmapFactory.decodeResource(
+				getResources(), R.drawable.enemy_shot));
 
-		game = new Game(1.0 * getHeight() / getWidth());
+		linePaint = new Paint();
+		linePaint.setColor(Color.WHITE);
+
+		game = new Game(1.0 * getHeight() / getWidth(), vibrator);
 		game.initCells();
 	}
 
@@ -123,8 +123,24 @@ public class MainGamePanel extends SurfaceView implements
 
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
-		motionEvents.add(event);
-		return super.onTouchEvent(event);
+		switch (event.getAction()) {
+		case MotionEvent.ACTION_DOWN:
+		case MotionEvent.ACTION_UP:
+		case MotionEvent.ACTION_MOVE:
+			motionEvents.add(event);
+			break;
+		default:
+			break;
+		}
+		return true;
+	}
+
+	private double getEventX(MotionEvent event) {
+		return 1.0 * event.getX() / getWidth();
+	}
+
+	private double getEventY(MotionEvent event) {
+		return 1.0 * event.getY() / getWidth(); // YES! By WIDTH! -,-
 	}
 
 	public void processUserInput() {
@@ -133,19 +149,21 @@ public class MainGamePanel extends SurfaceView implements
 			if (event == null)
 				break;
 
-			if (event.getAction() != MotionEvent.ACTION_DOWN)
-				return;
-
-			double eX = 1.0 * event.getX() / getWidth();
-			double eY = 1.0 * event.getY() / getWidth(); // YES! By WIDTH! -,-
-
-			for (Cell cell : game.cells) {
-				double d = Game.distance(eX, eY, cell.x, cell.y);
-				if (d <= cell.radius) {
-					cell.handleActionTap();
-					vibrator.vibrate(40);
-					break;
+			switch (event.getAction()) {
+			case MotionEvent.ACTION_DOWN:
+				game.handleActionDown(getEventX(event), getEventY(event));
+				break;
+			case MotionEvent.ACTION_UP:
+				game.handleActionUp(getEventX(event), getEventY(event));
+				break;
+			case MotionEvent.ACTION_MOVE:
+				while (!motionEvents.isEmpty()
+						&& motionEvents.peek().getAction() == MotionEvent.ACTION_MOVE) {
+					// get the latest MOVE from queue!
+					event = motionEvents.poll();
 				}
+				game.handleActionMove(getEventX(event), getEventY(event));
+				break;
 			}
 		}
 	}
@@ -159,6 +177,8 @@ public class MainGamePanel extends SurfaceView implements
 			drawCell(canvas, cell);
 		for (Shot shot : game.shots)
 			drawShot(canvas, shot);
+
+		drawLine(canvas);
 	}
 
 	private void drawBackground(Canvas canvas) {
@@ -195,9 +215,6 @@ public class MainGamePanel extends SurfaceView implements
 	private void drawCell(Canvas canvas, Cell cell) {
 		Bitmap bitmap = bitmapCell.get(cell.type);
 
-		if (cell.type == Cell.Type.HUMAN && cell.selected)
-			bitmap = bitmapSelected;
-
 		int rW = t(cell.radius * 2);
 		int rH = rW;
 		int rX = t(cell.x - cell.radius);
@@ -213,8 +230,8 @@ public class MainGamePanel extends SurfaceView implements
 		paint.setTextSize(t(TEXT_SIZE));
 		paint.setTextAlign(Paint.Align.CENTER);
 
-		canvas.drawText(cell.load + "/" + cell.capacity, t(cell.x),
-				t(cell.y + 0.3 * TEXT_SIZE), paint);
+		canvas.drawText(cell.load + "/" + cell.capacity, t(cell.x), t(cell.y
+				+ 0.3 * TEXT_SIZE), paint);
 	}
 
 	private void drawShot(Canvas canvas, Shot shot) {
@@ -235,6 +252,15 @@ public class MainGamePanel extends SurfaceView implements
 		paint.setTextSize(t(TEXT_SIZE));
 		paint.setTextAlign(Paint.Align.CENTER);
 
-		canvas.drawText("" + shot.load, t(shot.x), t(shot.y + 0.3 * TEXT_SIZE), paint);
+		canvas.drawText("" + shot.load, t(shot.x), t(shot.y + 0.3 * TEXT_SIZE),
+				paint);
+	}
+
+	private void drawLine(Canvas canvas) {
+		Cell source = game.getSourceCell();
+
+		if (source != null) // if user selected a source cell
+			canvas.drawLine(t(source.x), t(source.y), t(game.fingerAtX),
+					t(game.fingerAtY), linePaint);
 	}
 }
