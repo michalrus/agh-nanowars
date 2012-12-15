@@ -50,6 +50,8 @@ public class Game {
 	}
 
 	public void update(long dt) {
+		removeInvalidConnections();
+		
 		ai.update(dt);
 
 		for (Cell cell : cells)
@@ -64,6 +66,17 @@ public class Game {
 		if (!finishedShots.isEmpty())
 			for (Shot shot : finishedShots)
 				shots.remove(shot);
+	}
+	
+	/**
+	 * Removes connections from cells that changed {@link Cell#Type} after choosing them as {@link #sourceCell}.
+	 */
+	private void removeInvalidConnections() {
+		if (sourceCell != null && sourceCell.type != Cell.Type.HUMAN) {
+			sourceCell = null;
+			destinationCell = null;
+			tappedDownCell = null;
+		}
 	}
 
 	private Cell getCellAt(double x, double y) {
