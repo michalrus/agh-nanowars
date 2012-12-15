@@ -18,14 +18,20 @@ public class Shot {
 	public Shot(Cell from, Cell to, int load) {
 		this.from = from;
 		this.to = to;
-		this.load = load;
+		this.load = 0;
 		x = from.x;
 		y = from.y;
 		type = from.type;
 		
+		addLoad(load);
+	}
+	
+	public void addLoad (int load) {
+		this.load += load;
+		
 		double a = (RADIUS_AT_L - RADIUS_AT_K) / (RADIUS_L - RADIUS_K);
 		double b = RADIUS_AT_K - RADIUS_K * a;
-		radius = a * load + b;
+		radius = a * this.load + b;
 		moveOverlap = radius * (1 - MOVE_OVERLAP);
 	}
 	

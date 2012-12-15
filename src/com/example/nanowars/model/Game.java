@@ -13,8 +13,10 @@ public class Game {
 
 	private Vibrator vibrator;
 
-	private Cell sourceCell, fingerAtCell;
-	public double fingerAtX, fingerAtY;
+	private Cell sourceCell, destinationCell, fingerAtCell, tappedDownCell;
+	public double lineEndX, lineEndY;
+
+	private static double BABY_SHOT_DISTANCE = 0.04166666666666666666666666666667;
 
 	public static double distance(double x1, double y1, double x2, double y2) {
 		return Math.sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
@@ -26,6 +28,9 @@ public class Game {
 		this.vibrator = vibrator;
 
 		sourceCell = null;
+		destinationCell = null;
+		fingerAtCell = null;
+		tappedDownCell = null;
 	}
 
 	public void initCells() {
@@ -78,51 +83,88 @@ public class Game {
 	public void handleActionDown(double x, double y) {
 		Cell touched = getCellAt(x, y);
 
-		if (touched != null && touched.type == Cell.Type.HUMAN) {
-			// we're choosing an attacker cell
-			sourceCell = touched;
+		if (touched != null
+				&& (touched == destinationCell || touched.type == Cell.Type.HUMAN)) {
 			vibrator.vibrate(40);
-		} else
+		}
+
+		if (sourceCell != null && destinationCell != null
+				&& touched != destinationCell) {
+			// cancel a connection
 			sourceCell = null;
+			destinationCell = null;
+			tappedDownCell = null;
+		}
 
-		fingerAtCell = sourceCell;
-		fingerAtX = x;
-		fingerAtY = y;
-	}
-
-	public void handleActionUp(double x, double y) {
-		Cell touched = getCellAt(x, y);
-
-		if (touched != null && sourceCell != null)
-			sourceCell.shootAt(touched);
-
-		sourceCell = null;
-		fingerAtCell = null;
-
-		fingerAtX = x;
-		fingerAtY = y;
+		tappedDownCell = touched; // even if it's null
 	}
 
 	public void handleActionMove(double x, double y) {
 		Cell touched = getCellAt(x, y);
 
-		if (touched != null && sourceCell != null && touched != fingerAtCell && touched != sourceCell) {
-			// they're hovering over a new cell with their own cell selected
-			vibrator.vibrate(40);
+		if (tappedDownCell != null && touched != tappedDownCell
+				&& tappedDownCell.type == Cell.Type.HUMAN) {
+			sourceCell = tappedDownCell;
+			destinationCell = null;
+			tappedDownCell = null;
+		}
+
+		if (sourceCell != null && destinationCell == null) {
+			if (touched != null) {
+				if (touched != fingerAtCell && touched != sourceCell)
+					vibrator.vibrate(40);
+
+				lineEndX = touched.x;
+				lineEndY = touched.y;
+			} else {
+				lineEndX = x;
+				lineEndY = y;
+			}
 		}
 
 		fingerAtCell = touched; // even if it's null!
+	}
 
-		// to draw a line
-		fingerAtX = x;
-		fingerAtY = y;
+	public void handleActionUp(double x, double y) {
+		Cell touched = getCellAt(x, y);
+
+		if (touched == null) {
+			// cancel a connection
+			sourceCell = null;
+			destinationCell = null;
+			tappedDownCell = null;
+		} else if (sourceCell != null) {
+			if (destinationCell == null)
+				// are we making a connection?
+				destinationCell = touched;
+			if (destinationCell == touched)
+				sourceCell.shootAt(destinationCell);
+		}
+
+		fingerAtCell = null; // mr. obvious
+
+		lineEndX = x;
+		lineEndY = y;
 	}
 
 	public void addShot(Cell from, Cell to, int load) {
-		shots.add(new Shot(from, to, load));
+		if (from.lastShot == null
+				|| from.lastShot.finished
+				|| from.lastShot.to != to
+				|| distance(from.x, from.y, from.lastShot.x, from.lastShot.y) > (from.radius
+						+ from.lastShot.radius + BABY_SHOT_DISTANCE)) {
+			Shot shot = new Shot(from, to, load);
+			shots.add(shot);
+			from.lastShot = shot;
+		} else
+			from.lastShot.addLoad(load);
 	}
 
 	public Cell getSourceCell() {
 		return sourceCell;
+	}
+
+	public Cell getDestinationCell() {
+		return destinationCell;
 	}
 }

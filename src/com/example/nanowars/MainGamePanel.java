@@ -1,6 +1,7 @@
 package com.example.nanowars;
 
 import java.util.HashMap;
+import java.util.Queue;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -27,7 +28,10 @@ public class MainGamePanel extends SurfaceView implements
 	private MainThread thread;
 	private Vibrator vibrator;
 
-	private ConcurrentLinkedQueue<MotionEvent> motionEvents;
+	// don't touch!
+	// freaking ConcurrentLinkeyQueue implementation error
+	// last ACTION_MOVE is read as ACTION_UP if we use one queue for all events
+	private Queue<MotionEvent> downEvents, upEvents, moveEvents;
 
 	public Game game;
 
@@ -43,7 +47,10 @@ public class MainGamePanel extends SurfaceView implements
 
 		vibrator = (Vibrator) context
 				.getSystemService(Context.VIBRATOR_SERVICE);
-		motionEvents = new ConcurrentLinkedQueue<MotionEvent>();
+
+		downEvents = new ConcurrentLinkedQueue<MotionEvent>();
+		upEvents = new ConcurrentLinkedQueue<MotionEvent>();
+		moveEvents = new ConcurrentLinkedQueue<MotionEvent>();
 
 		getHolder().addCallback(this);
 		setFocusable(true);
@@ -125,13 +132,16 @@ public class MainGamePanel extends SurfaceView implements
 	public boolean onTouchEvent(MotionEvent event) {
 		switch (event.getAction()) {
 		case MotionEvent.ACTION_DOWN:
-		case MotionEvent.ACTION_UP:
-		case MotionEvent.ACTION_MOVE:
-			motionEvents.add(event);
+			downEvents.add(event);
 			break;
-		default:
+		case MotionEvent.ACTION_MOVE:
+			moveEvents.add(event);
+			break;
+		case MotionEvent.ACTION_UP:
+			upEvents.add(event);
 			break;
 		}
+
 		return true;
 	}
 
@@ -145,26 +155,24 @@ public class MainGamePanel extends SurfaceView implements
 
 	public void processUserInput() {
 		for (;;) {
-			MotionEvent event = motionEvents.poll();
+			MotionEvent event = downEvents.poll();
 			if (event == null)
 				break;
+			game.handleActionDown(getEventX(event), getEventY(event));
+		}
 
-			switch (event.getAction()) {
-			case MotionEvent.ACTION_DOWN:
-				game.handleActionDown(getEventX(event), getEventY(event));
+		for (;;) {
+			MotionEvent event = moveEvents.poll();
+			if (event == null)
 				break;
-			case MotionEvent.ACTION_UP:
-				game.handleActionUp(getEventX(event), getEventY(event));
+			game.handleActionMove(getEventX(event), getEventY(event));
+		}
+
+		for (;;) {
+			MotionEvent event = upEvents.poll();
+			if (event == null)
 				break;
-			case MotionEvent.ACTION_MOVE:
-				while (!motionEvents.isEmpty()
-						&& motionEvents.peek().getAction() == MotionEvent.ACTION_MOVE) {
-					// get the latest MOVE from queue!
-					event = motionEvents.poll();
-				}
-				game.handleActionMove(getEventX(event), getEventY(event));
-				break;
-			}
+			game.handleActionUp(getEventX(event), getEventY(event));
 		}
 	}
 
@@ -173,12 +181,12 @@ public class MainGamePanel extends SurfaceView implements
 
 		drawBackground(canvas);
 
+		drawLine(canvas);
+
 		for (Cell cell : game.cells)
 			drawCell(canvas, cell);
 		for (Shot shot : game.shots)
 			drawShot(canvas, shot);
-
-		drawLine(canvas);
 	}
 
 	private void drawBackground(Canvas canvas) {
@@ -258,9 +266,22 @@ public class MainGamePanel extends SurfaceView implements
 
 	private void drawLine(Canvas canvas) {
 		Cell source = game.getSourceCell();
+		Cell destination = game.getDestinationCell();
 
-		if (source != null) // if user selected a source cell
-			canvas.drawLine(t(source.x), t(source.y), t(game.fingerAtX),
-					t(game.fingerAtY), linePaint);
+		if (source != null) {
+			// if user selected a source cell
+			double toX, toY;
+
+			if (destination != null) {
+				// if a connection has been made
+				toX = destination.x;
+				toY = destination.y;
+			} else {
+				toX = game.lineEndX;
+				toY = game.lineEndY;
+			}
+
+			canvas.drawLine(t(source.x), t(source.y), t(toX), t(toY), linePaint);
+		}
 	}
 }

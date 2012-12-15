@@ -12,6 +12,8 @@ public class Cell {
 
 	public double x, y, radius;
 
+	public Shot lastShot;
+	
 	public enum Type {
 		HUMAN, ENEMY, NEUTRAL
 	}
@@ -28,6 +30,7 @@ public class Cell {
 		this.capacity = capacity;
 		this.load = load;
 		nextIncreaseIn = INCREASE_LOAD_EVERY;
+		lastShot = null;
 
 		this.x = x;
 		this.y = y;
