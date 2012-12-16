@@ -1,9 +1,7 @@
 package com.example.nanowars;
 
 import java.util.HashMap;
-import java.util.Queue;
-
-import java.util.Map;
+import java.util.LinkedList;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.example.nanowars.model.Cell;
@@ -25,32 +23,44 @@ import android.view.SurfaceView;
 public class MainGamePanel extends SurfaceView implements
 		SurfaceHolder.Callback {
 
+	private OrientationDetector orientationDetector;
 	private MainThread thread;
 	private Vibrator vibrator;
 
 	// don't touch!
 	// freaking ConcurrentLinkeyQueue implementation error
 	// last ACTION_MOVE is read as ACTION_UP if we use one queue for all events
-	private Queue<MotionEvent> downEvents, upEvents, moveEvents;
+	private ConcurrentLinkedQueue<MotionEvent> downEvents, upEvents, moveEvents;
 
 	public Game game;
 
-	private Map<Cell.Type, Bitmap> bitmapCell, bitmapShot;
+	private HashMap<Cell.Type, Bitmap> bitmapCell, bitmapShot;
 	private Bitmap bitmapBackground;
 
 	private Paint linePaint;
 
 	private static double TEXT_SIZE = 0.04166666666666666666666666666667;
 
+	private static int DEVICE_ROTATION_NUM_EL_MEAN = 40;
+	private LinkedList<Float> deviceRotations;
+	private int deviceRotationsSize;
+	private float deviceRotation;
+
 	public MainGamePanel(Context context) {
 		super(context);
 
 		vibrator = (Vibrator) context
 				.getSystemService(Context.VIBRATOR_SERVICE);
+		
+		orientationDetector = new OrientationDetector(context);
 
 		downEvents = new ConcurrentLinkedQueue<MotionEvent>();
 		upEvents = new ConcurrentLinkedQueue<MotionEvent>();
 		moveEvents = new ConcurrentLinkedQueue<MotionEvent>();
+		
+		deviceRotations = new LinkedList<Float>();
+		deviceRotationsSize = 0;
+		deviceRotation = 0.0f;
 
 		getHolder().addCallback(this);
 		setFocusable(true);
@@ -60,6 +70,7 @@ public class MainGamePanel extends SurfaceView implements
 	}
 
 	public void pause() {
+		orientationDetector.pause();
 		thread.die();
 		waitForMainThreadDeath();
 	}
@@ -67,6 +78,7 @@ public class MainGamePanel extends SurfaceView implements
 	public void resume() {
 		if (thread != null || game == null)
 			return;
+		orientationDetector.resume();
 		thread = new MainThread(getHolder(), this);
 		thread.start();
 	}
@@ -231,15 +243,17 @@ public class MainGamePanel extends SurfaceView implements
 		Rect rs = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
 		Rect rd = new Rect(rX, rY, rX + rW, rY + rH);
 
-		canvas.drawBitmap(bitmap, rs, rd, null);
-
 		Paint paint = new Paint();
 		paint.setColor(Color.WHITE);
 		paint.setTextSize(t(TEXT_SIZE));
 		paint.setTextAlign(Paint.Align.CENTER);
 
+		canvas.save();
+		canvas.rotate(deviceRotation, t(cell.x), t(cell.y));
+		canvas.drawBitmap(bitmap, rs, rd, null);
 		canvas.drawText(cell.load + "/" + cell.capacity, t(cell.x), t(cell.y
 				+ 0.3 * TEXT_SIZE), paint);
+		canvas.restore();
 	}
 
 	private void drawShot(Canvas canvas, Shot shot) {
@@ -253,15 +267,17 @@ public class MainGamePanel extends SurfaceView implements
 		Rect rs = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
 		Rect rd = new Rect(rX, rY, rX + rW, rY + rH);
 
-		canvas.drawBitmap(bitmap, rs, rd, null);
-
 		Paint paint = new Paint();
 		paint.setColor(Color.WHITE);
 		paint.setTextSize(t(TEXT_SIZE));
 		paint.setTextAlign(Paint.Align.CENTER);
 
+		canvas.save();
+		canvas.rotate(deviceRotation, t(shot.x), t(shot.y));
+		canvas.drawBitmap(bitmap, rs, rd, null);
 		canvas.drawText("" + shot.load, t(shot.x), t(shot.y + 0.3 * TEXT_SIZE),
 				paint);
+		canvas.restore();
 	}
 
 	private void drawLine(Canvas canvas) {
@@ -283,5 +299,24 @@ public class MainGamePanel extends SurfaceView implements
 
 			canvas.drawLine(t(source.x), t(source.y), t(toX), t(toY), linePaint);
 		}
+	}
+
+	public void processSensors() {
+		float angle = orientationDetector.getRotation();
+		
+		deviceRotationsSize++;
+		deviceRotations.add(angle);
+		
+		while (deviceRotationsSize > DEVICE_ROTATION_NUM_EL_MEAN) {
+			deviceRotations.removeFirst();
+			deviceRotationsSize--;
+		}
+		
+		float sum = 0.0f;
+		for (Float el : deviceRotations) {
+			sum += el;
+		}
+		
+		deviceRotation = sum / deviceRotationsSize;
 	}
 }

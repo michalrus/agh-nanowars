@@ -31,9 +31,10 @@ public class MainThread extends Thread {
 				canvas = this.surfaceHolder.lockCanvas();
 				synchronized (surfaceHolder) {
 					now = new Date().getTime();
-					this.gamePanel.processUserInput();
-					this.gamePanel.game.update(now - then);
-					this.gamePanel.render(canvas);
+					gamePanel.processSensors();
+					gamePanel.processUserInput();
+					gamePanel.game.update(now - then);
+					gamePanel.render(canvas);
 					then = now;
 				}
 			} finally {
